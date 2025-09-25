@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Teachable Machine Mobile + ThingSpeak</title>
+  <title>Gesture2ThingSpeak</title>
 </head>
 <body>
-  <div>Teachable Machine Image Model</div>
-  <button id="start-btn">Start</button>
-  <button id="stop-btn">Stop</button>
-  <button id="toggle-camera-btn">Switch Camera</button>
+  <h2>Gesture2ThingSpeak</h2>
+  <div>
+    <label for="camera-select">Choose Camera: </label>
+    <select id="camera-select">
+      <option value="user">Front Camera</option>
+      <option value="environment" selected>Back Camera</option>
+    </select>
+    <button id="start-btn">Start</button>
+    <button id="stop-btn">Stop</button>
+  </div>
   <div id="webcam-container"></div>
   <div id="label-container"></div>
 
@@ -19,16 +25,18 @@
     const THINGSPEAK_WRITE_API_KEY = "RVM93PYQL3CHL23X";
 
     let model, webcam, labelContainer, maxPredictions;
-    let currentFacingMode = "environment"; // back camera
     let running = false;
+    let currentFacingMode = "environment";
 
     document.getElementById("start-btn").addEventListener("click", init);
     document.getElementById("stop-btn").addEventListener("click", stopWebcam);
-    document.getElementById("toggle-camera-btn").addEventListener("click", toggleCamera);
 
     async function init() {
-      if (running) return; // prevent multiple starts
+      if (running) return;
       running = true;
+
+      // Get camera choice
+      currentFacingMode = document.getElementById("camera-select").value;
 
       const modelURL = URL + "model.json";
       const metadataURL = URL + "metadata.json";
@@ -99,14 +107,6 @@
         webcam.stop();
         running = false;
         document.getElementById("webcam-container").innerHTML = "";
-      }
-    }
-
-    async function toggleCamera() {
-      currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
-      if (webcam) {
-        webcam.stop();
-        await init();
       }
     }
   </script>
