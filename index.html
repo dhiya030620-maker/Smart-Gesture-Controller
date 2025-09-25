@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Teachable Machine Mobile + ThingSpeak</title>
+</head>
+<body>
+  <div>Teachable Machine Image Model</div>
+  <button id="start-btn">Start</button>
+  <button id="stop-btn">Stop</button>
+  <button id="toggle-camera-btn">Switch Camera</button>
+  <div id="webcam-container"></div>
+  <div id="label-container"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <script type="text/javascript">
+    const URL = "https://teachablemachine.withgoogle.com/models/E1tJ82W9e/";
+    const THINGSPEAK_WRITE_API_KEY = "RVM93PYQL3CHL23X";
+
+    let model, webcam, labelContainer, maxPredictions;
+    let currentFacingMode = "environment"; // back camera
+    let running = false;
+
+    document.getElementById("start-btn").addEventListener("click", init);
+    document.getElementById("stop-btn").addEventListener("click", stopWebcam);
+    document.getElementById("toggle-camera-btn").addEventListener("click", toggleCamera);
+
+    async function init() {
+      if (running) return; // prevent multiple starts
+      running = true;
+
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
+
+      // Load Teachable Machine model
+      if (!model) {
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+      }
+
+      // Setup webcam
+      webcam = new tmImage.Webcam(320, 320, true);
+      await webcam.setup({ facingMode: currentFacingMode });
+      await webcam.play();
+      window.requestAnimationFrame(loop);
+
+      // Add webcam to DOM
+      document.getElementById("webcam-container").innerHTML = "";
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+      // Create label divs
+      labelContainer = document.getElementById("label-container");
+      labelContainer.innerHTML = "";
+      for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.appendChild(document.createElement("div"));
+      }
+    }
+
+    async function loop() {
+      if (!running) return;
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+
+      // Update label container
+      for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.childNodes[i].innerHTML =
+          prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+      }
+
+      // ThingSpeak logic (70% threshold)
+      const class1 = prediction[0];
+      const class2 = prediction[1];
+
+      if (class1.probability >= 0.7) {
+        sendToThingSpeak(1, 0);
+      } else if (class2.probability >= 0.7) {
+        sendToThingSpeak(0, 1);
+      }
+    }
+
+    async function sendToThingSpeak(field1Value, field2Value) {
+      const url = `https://api.thingspeak.com/update.json?api_key=${THINGSPEAK_WRITE_API_KEY}&field1=${field1Value}&field2=${field2Value}`;
+      try {
+        await fetch(url, { method: "GET" });
+        console.log(`ThingSpeak updated: Field1=${field1Value}, Field2=${field2Value}`);
+      } catch (err) {
+        console.error("ThingSpeak update failed:", err);
+      }
+    }
+
+    async function stopWebcam() {
+      if (webcam) {
+        webcam.stop();
+        running = false;
+        document.getElementById("webcam-container").innerHTML = "";
+      }
+    }
+
+    async function toggleCamera() {
+      currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+      if (webcam) {
+        webcam.stop();
+        await init();
+      }
+    }
+  </script>
+</body>
+</html>
